@@ -1,0 +1,1049 @@
+
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3D модель з панорамами</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --ink: rgba(16,24,32,.88);
+  --text: #f3f5f7;
+  --muted: #9fb0bd;
+  --acc: #ffd23f;
+  --sa-b: env(safe-area-inset-bottom,0px);
+  --sa-t: env(safe-area-inset-top,0px);
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  font-family: Onest, system-ui, "Segoe UI", Roboto, sans-serif;
+  background: linear-gradient(#c9d4dc,#eef1f3 70%);
+  color: var(--text);
+}
+
+canvas { display: block; }
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+#markers {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.hs {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: -11px 0 0 -11px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  will-change: transform;
+}
+
+.hs .n {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #101820;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  display: grid;
+  place-items: center;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 600;
+  flex: none;
+}
+
+.hs .l { display: none !important; }
+.hs.off { display: none; }
+
+.bar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + var(--sa-b));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: var(--ink);
+  border-radius: 16px;
+  backdrop-filter: blur(8px);
+  max-width: calc(100% - 20px);
+  z-index: 5;
+}
+
+button {
+  font: inherit;
+  font-size: 14px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 11px;
+  cursor: pointer;
+}
+
+button:hover { background: rgba(255,255,255,.1); }
+
+button:focus-visible {
+  outline: 3px solid var(--acc);
+  outline-offset: 2px;
+}
+
+button.on {
+  background: var(--acc);
+  color: #101820;
+}
+
+#title {
+  position: fixed;
+  left: 12px;
+  top: calc(12px + var(--sa-t));
+  background: var(--ink);
+  padding: 9px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+#status {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%,-50%);
+  background: var(--ink);
+  padding: 12px 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  max-width: 86%;
+  text-align: center;
+  z-index: 6;
+}
+
+#status.hidden { display: none; }
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 62vh;
+  max-height: 62dvh;
+  overflow: auto;
+  background: var(--ink);
+  backdrop-filter: blur(10px);
+  border-radius: 20px 20px 0 0;
+  padding: 14px 16px calc(16px + var(--sa-b));
+  z-index: 8;
+  transform: translateY(105%);
+  transition: transform .22s ease;
+}
+
+.sheet.open { transform: none; }
+
+.sheet header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.sheet h2 { margin: 0; font-size: 16px; }
+
+@media (min-width:700px) {
+  .sheet {
+    left: auto;
+    right: 14px;
+    bottom: 14px;
+    width: 380px;
+    border-radius: 18px;
+  }
+}
+
+.list button {
+  display: flex;
+  width: 100%;
+  text-align: left;
+  align-items: center;
+  gap: 12px;
+  padding: 0 8px;
+}
+
+.list .n {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  color: #101820;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex: none;
+}
+
+#pano {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: none;
+  z-index: 20;
+}
+
+#pano.open { display: block; }
+
+#panoCanvas {
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+#panoTop {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: calc(12px + var(--sa-t));
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  pointer-events: none;
+}
+
+#panoTop > * {
+  pointer-events: auto;
+  background: var(--ink);
+  border-radius: 12px;
+}
+
+#panoTitle {
+  padding: 11px 14px;
+  font-weight: 600;
+  font-size: 15px;
+}
+
+#panoNav {
+  position: absolute;
+  left: 50%;
+  bottom: calc(16px + var(--sa-b));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  padding: 6px;
+  background: var(--ink);
+  border-radius: 16px;
+}
+
+#panoLoading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%,-50%);
+  font-size: 14px;
+  text-align: center;
+  max-width: 80%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet { transition: none; }
+}
+</style>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+
+<body>
+
+<canvas id="scene"></canvas>
+<div id="markers"></div>
+<div id="title"></div>
+
+<div class="bar">
+  <button id="bReset" type="button">Скинути вигляд</button>
+  <button id="bList" type="button">Панорами</button>
+</div>
+
+<div id="status">Завантаження моделі…</div>
+
+<section class="sheet" id="sList" aria-label="Список панорам">
+  <header>
+    <h2>Панорами</h2>
+    <button type="button" data-close>Закрити</button>
+  </header>
+  <div class="list" id="listBody"></div>
+</section>
+
+<div id="pano" role="dialog" aria-label="Панорама">
+  <canvas id="panoCanvas"></canvas>
+  <div id="panoTop">
+    <div id="panoTitle"></div>
+    <button id="panoClose" type="button">Закрити</button>
+  </div>
+  <div id="panoNav">
+    <button id="pPrev" type="button">Назад</button>
+    <button id="pNext" type="button">Далі</button>
+  </div>
+  <div id="panoLoading"></div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+/* ============ НАЛАШТУВАННЯ ============ */
+
+const CFG = {
+  title: '3D модель',
+  model: 'model/Fasad.glb',
+
+  traj: {
+    url: './model/poses.txt',
+    nameCol: 1,
+    xCol: 2,
+    yCol: 3,
+    zCol: 4
+  },
+
+  pano: (file) => {
+    const raw = String(file || '')
+      .trim()
+      .replace(/\\/g, '/')
+      .replace(/^["']|["']$/g, '');
+
+    if (!raw) return '';
+
+    if (/^(https?:|data:|blob:)/i.test(raw)) {
+      return raw;
+    }
+
+    const name = raw.split('/').pop();
+    return './model/pano/' + name;
+  },
+
+  // Початкові параметри траєкторії.
+  // Збережені раніше значення localStorage також використовуються.
+  align: {
+    x: null,
+    y: null,
+    z: null,
+    rot: 0,
+    scale: 1,
+    zup: false
+  }
+};
+
+const KEY = 'traj-align-v1';
+
+/* ============ СЦЕНА ============ */
+
+const $ = (id) => document.getElementById(id);
+
+const canvas = $('scene');
+const statusEl = $('status');
+const markersEl = $('markers');
+
+$('title').textContent = CFG.title;
+document.title = CFG.title;
+
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  alpha: true
+});
+
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
+
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+controls.screenSpacePanning = true;
+controls.maxPolarAngle = Math.PI * 0.495;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 1.1));
+
+const sun = new THREE.DirectionalLight(0xffffff, 1.6);
+sun.position.set(40, 80, 30);
+scene.add(sun);
+
+let model = null;
+let box = new THREE.Box3();
+
+const home = {
+  pos: new THREE.Vector3(),
+  target: new THREE.Vector3()
+};
+
+function fitCamera() {
+  const size = box.getSize(new THREE.Vector3());
+  const c = box.getCenter(new THREE.Vector3());
+  const r = Math.max(size.x, size.y, size.z);
+  const d = r * 1.4;
+
+  controls.target.copy(c);
+  camera.position.set(c.x + d, c.y + d * 0.6, c.z + d);
+
+  camera.near = r / 1000;
+  camera.far = r * 50;
+  camera.updateProjectionMatrix();
+
+  controls.minDistance = r * 0.03;
+  controls.maxDistance = r * 4;
+  controls.update();
+
+  home.pos.copy(camera.position);
+  home.target.copy(controls.target);
+}
+
+$('bReset').onclick = () => {
+  camera.position.copy(home.pos);
+  controls.target.copy(home.target);
+  controls.update();
+};
+
+const draco = new DRACOLoader().setDecoderPath(
+  'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/libs/draco/'
+);
+
+const loader = new GLTFLoader().setDRACOLoader(draco);
+
+const fail = (message) => {
+  statusEl.classList.remove('hidden');
+  statusEl.textContent = message;
+};
+
+/* ============ ТРАЄКТОРІЯ ============ */
+
+const traj = new THREE.Group();
+scene.add(traj);
+
+const line = new THREE.Line(
+  new THREE.BufferGeometry(),
+  new THREE.LineBasicMaterial({
+    color: 0x101820,
+    depthTest: false,
+    transparent: true,
+    opacity: .55
+  })
+);
+
+line.renderOrder = 5;
+traj.add(line);
+
+let rows = [];
+let local = [];
+let pts = [];
+let hs = [];
+
+let savedAlign = {};
+
+try {
+  savedAlign = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
+} catch (e) {
+  console.warn('Не вдалося прочитати збережені параметри траєкторії:', e);
+}
+
+const S = { ...CFG.align, ...savedAlign };
+
+function parseTraj(t) {
+  t = t.replace(/^\uFEFF/, '');
+
+  const c = CFG.traj;
+  const out = [];
+  const lines = t.split(/\r?\n/);
+  const skipped = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i].trim();
+
+    if (!text || text.startsWith('#')) continue;
+
+    const a = text.split(/[\s,;]+/);
+
+    const x = Number(a[c.xCol]);
+    const y = Number(a[c.yCol]);
+    const z = Number(a[c.zCol]);
+
+    if (
+      a.length <= Math.max(c.nameCol, c.xCol, c.yCol, c.zCol) ||
+      !Number.isFinite(x) ||
+      !Number.isFinite(y) ||
+      !Number.isFinite(z)
+    ) {
+      if (skipped.length < 5) {
+        skipped.push({
+          line: i + 1,
+          columns: a.length,
+          content: text.slice(0, 250),
+          values: a.slice(0, 9)
+        });
+      }
+      continue;
+    }
+
+    const file = String(a[c.nameCol] || '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
+
+    out.push({
+      name: file.split('/').pop().replace(/\.\w+$/, ''),
+      file,
+      p: [x, y, z]
+    });
+  }
+
+  console.log('Усього рядків:', lines.length);
+  console.log('Розпізнано позицій:', out.length);
+  console.log('Перші позиції:', out.slice(0, 3));
+  console.log('Приклади нерозпізнаних рядків:', skipped);
+
+  return out;
+}
+
+function buildLocal() {
+  pts = rows.map((r) =>
+    S.zup
+      ? new THREE.Vector3(r.p[0], r.p[2], -r.p[1])
+      : new THREE.Vector3(...r.p)
+  );
+
+  const c = pts
+    .reduce((a, p) => a.add(p), new THREE.Vector3())
+    .divideScalar(pts.length || 1);
+
+  local = pts.map((p) => p.clone().sub(c));
+  line.geometry.setFromPoints(local);
+}
+
+function applyAlign() {
+  traj.position.set(S.x, S.y, S.z);
+  traj.rotation.y = THREE.MathUtils.degToRad(S.rot);
+  traj.scale.setScalar(S.scale);
+  traj.updateMatrixWorld(true);
+}
+
+function saveAlign() {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(S));
+  } catch (e) {
+    console.warn('Не вдалося зберегти параметри траєкторії:', e);
+  }
+}
+
+/*
+  Початкове положення траєкторії.
+  Інтерфейс ручного вирівнювання видалено, але збережені раніше
+  координати, поворот, масштаб і zup продовжують застосовуватися.
+*/
+function initTrajectory() {
+  const c = box.getCenter(new THREE.Vector3());
+
+  if (S.x == null || S.y == null || S.z == null) {
+    S.x = c.x;
+    S.y = box.min.y + 1.6;
+    S.z = c.z;
+    saveAlign();
+  }
+
+  buildLocal();
+  applyAlign();
+}
+
+/* ============ МАРКЕРИ ТА СПИСОК ПАНОРАМ ============ */
+
+function buildMarkers() {
+  markersEl.innerHTML = '';
+  hs = [];
+
+  rows.forEach((r, i) => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'hs';
+    el.setAttribute('aria-label', 'Панорама: ' + r.name);
+    el.innerHTML = '<span class="n"></span><span class="l"></span>';
+
+    el.firstChild.textContent = i + 1;
+    el.lastChild.textContent = r.name;
+
+    // Клік на маркер обробляється через координати на canvas.
+    // Це дозволяє OrbitControls працювати над кружками.
+    markersEl.appendChild(el);
+    hs.push(el);
+  });
+
+  $('listBody').innerHTML = '';
+
+  rows.forEach((r, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML = '<span class="n"></span><span></span>';
+
+    b.firstChild.textContent = i + 1;
+    b.lastChild.textContent = r.name;
+
+    b.onclick = () => {
+      closeSheets();
+      openPano(i);
+    };
+
+    $('listBody').appendChild(b);
+  });
+}
+
+const tmp = new THREE.Vector3();
+const markerScreen = [];
+
+function updateMarkers() {
+  const w = innerWidth;
+  const h = innerHeight;
+
+  hs.forEach((el, i) => {
+    tmp.copy(local[i]).applyMatrix4(traj.matrixWorld).project(camera);
+
+    const visible =
+      tmp.z >= -1 && tmp.z <= 1 &&
+      tmp.x >= -1 && tmp.x <= 1 &&
+      tmp.y >= -1 && tmp.y <= 1;
+
+    el.classList.toggle('off', !visible);
+
+    markerScreen[i] = visible
+      ? {
+          x: (tmp.x * 0.5 + 0.5) * w,
+          y: (-tmp.y * 0.5 + 0.5) * h
+        }
+      : null;
+
+    if (visible) {
+      el.style.transform =
+        `translate(${markerScreen[i].x}px,${markerScreen[i].y}px)`;
+    }
+  });
+}
+
+/*
+  Натискання на маркер відкриває панораму.
+  Перетягування миші не відкриває її, а продовжує обертати сцену.
+*/
+let down = null;
+
+canvas.addEventListener('pointerdown', (e) => {
+  down = [e.clientX, e.clientY];
+});
+
+canvas.addEventListener('pointerup', (e) => {
+  if (!down) return;
+
+  const start = down;
+  down = null;
+
+  if (Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 6) {
+    return;
+  }
+
+  let nearest = -1;
+  let bestDistance = 18;
+
+  markerScreen.forEach((p, i) => {
+    if (!p || !hs[i] || hs[i].classList.contains('off')) return;
+
+    const d = Math.hypot(e.clientX - p.x, e.clientY - p.y);
+
+    if (d < bestDistance) {
+      bestDistance = d;
+      nearest = i;
+    }
+  });
+
+  if (nearest !== -1) {
+    openPano(nearest);
+  }
+});
+
+/* ============ ПАНЕЛЬ СПИСКУ ПАНОРАМ ============ */
+
+function closeSheets() {
+  $('sList').classList.remove('open');
+  $('bList').classList.remove('on');
+}
+
+$('bList').onclick = () => {
+  const shouldOpen = !$('sList').classList.contains('open');
+
+  closeSheets();
+
+  if (shouldOpen) {
+    $('sList').classList.add('open');
+    $('bList').classList.add('on');
+  }
+};
+
+document.querySelectorAll('[data-close]').forEach((b) => {
+  b.onclick = closeSheets;
+});
+
+/* ============ ЗАВАНТАЖЕННЯ МОДЕЛІ ТА ТРАЄКТОРІЇ ============ */
+
+loader.load(
+  CFG.model,
+  async (gltf) => {
+    model = gltf.scene;
+    scene.add(model);
+
+    box.setFromObject(model);
+    fitCamera();
+
+    try {
+      const res = await fetch(CFG.traj.url);
+
+      if (!res.ok) {
+        throw new Error(res.status);
+      }
+
+      rows = parseTraj(await res.text());
+
+      if (!rows.length) {
+        throw new Error('порожній файл або не вдалося розпізнати колонки');
+      }
+
+      buildMarkers();
+      initTrajectory();
+
+      statusEl.classList.add('hidden');
+    } catch (err) {
+      console.error(err);
+
+      fail(
+        `Модель завантажена, але траєкторію не прочитано (${CFG.traj.url}): ${err.message}. Перевірте шлях і номери колонок у CFG.traj.`
+      );
+
+      setTimeout(() => statusEl.classList.add('hidden'), 6000);
+    }
+  },
+  (e) => {
+    if (e.total) {
+      statusEl.textContent =
+        `Завантаження моделі… ${Math.round(e.loaded / e.total * 100)}%`;
+    }
+  },
+  (err) => {
+    console.error(err);
+
+    fail(
+      'Не вдалося завантажити модель. Перевірте шлях CFG.model і відкрийте сторінку через сервер, а не подвійним кліком по файлу.'
+    );
+  }
+);
+
+/* ============ ПЕРЕГЛЯДАЧ ПАНОРАМ ============ */
+
+const panoEl = $('pano');
+const pc = $('panoCanvas');
+const pLoad = $('panoLoading');
+
+const pr = new THREE.WebGLRenderer({
+  canvas: pc,
+  antialias: true
+});
+
+pr.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const ps = new THREE.Scene();
+const pcam = new THREE.PerspectiveCamera(75, 1, 0.1, 1100);
+const pmat = new THREE.MeshBasicMaterial();
+
+ps.add(
+  new THREE.Mesh(
+    new THREE.SphereGeometry(500, 64, 40).scale(-1, 1, 1),
+    pmat
+  )
+);
+
+let lon = 0;
+let lat = 0;
+let vLon = 0;
+let vLat = 0;
+let panoOpen = false;
+let cur = 0;
+let token = 0;
+
+function loadTexture(url) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+
+    img.onload = () => {
+      const cap = Math.min(
+        pr.capabilities.maxTextureSize,
+        matchMedia('(pointer:coarse)').matches ? 4096 : 8192
+      );
+
+      let src = img;
+
+      if (img.width > cap) {
+        src = document.createElement('canvas');
+        src.width = cap;
+        src.height = Math.round(cap * img.height / img.width);
+
+        src.getContext('2d').drawImage(
+          img, 0, 0, src.width, src.height
+        );
+      }
+
+      const t = new THREE.Texture(src);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = pr.capabilities.getMaxAnisotropy();
+      t.needsUpdate = true;
+
+      res(t);
+    };
+
+    img.onerror = () => rej(new Error('не знайдено ' + url));
+    img.src = url;
+  });
+}
+
+async function showPano(i) {
+  cur = (i + rows.length) % rows.length;
+  const my = ++token;
+
+  $('panoTitle').textContent =
+    `${cur + 1} / ${rows.length} · ${rows[cur].name}`;
+
+  pLoad.textContent = 'Завантаження панорами…';
+  pLoad.style.display = 'block';
+
+  try {
+    let panoFile = rows[cur].file || `${rows[cur].name}.jpg`;
+
+    if (
+      !/\.(jpe?g|png|webp|avif)$/i.test(panoFile) &&
+      !/^(https?:|data:|blob:)/i.test(panoFile)
+    ) {
+      panoFile += '.jpg';
+    }
+
+    const panoUrl = CFG.pano(panoFile);
+
+    if (!panoUrl) {
+      throw new Error('у poses.txt немає імені файлу панорами');
+    }
+
+    const t = await loadTexture(panoUrl);
+
+    if (my !== token) {
+      t.dispose();
+      return;
+    }
+
+    pmat.map?.dispose();
+    pmat.map = t;
+    pmat.needsUpdate = true;
+    pLoad.style.display = 'none';
+  } catch (e) {
+    console.error('Помилка панорами:', e);
+
+    if (my === token) {
+      pLoad.textContent =
+        'Не вдалося завантажити панораму: ' + e.message +
+        '. Перевірте шлях та назву файлу в model/poses.txt.';
+    }
+  }
+}
+
+function openPano(i) {
+  closeSheets();
+
+  if (!panoOpen) {
+    panoOpen = true;
+    panoEl.classList.add('open');
+    history.pushState({ pano: 1 }, '');
+    lon = lat = vLon = vLat = 0;
+    pcam.fov = 75;
+    pcam.updateProjectionMatrix();
+    resize();
+  }
+
+  showPano(i);
+}
+
+function hidePano() {
+  panoOpen = false;
+  token++;
+  panoEl.classList.remove('open');
+  pmat.map?.dispose();
+  pmat.map = null;
+}
+
+$('panoClose').onclick = () => {
+  if (history.state?.pano) {
+    history.back();
+  } else {
+    hidePano();
+  }
+};
+
+addEventListener('popstate', () => {
+  if (panoOpen) hidePano();
+});
+
+addEventListener('keydown', (e) => {
+  if (!panoOpen) return;
+
+  if (e.key === 'Escape') $('panoClose').click();
+  if (e.key === 'ArrowRight') showPano(cur + 1);
+  if (e.key === 'ArrowLeft') showPano(cur - 1);
+});
+
+$('pPrev').onclick = () => showPano(cur - 1);
+$('pNext').onclick = () => showPano(cur + 1);
+
+// Керування панорамою: перетягування, щипок і коліщатко з інерцією.
+const ptr = new Map();
+let pinch = 0;
+
+const dist = () => {
+  const [a, b] = [...ptr.values()];
+  return Math.hypot(a[0] - b[0], a[1] - b[1]);
+};
+
+const zoom = (f) => {
+  pcam.fov = Math.max(30, Math.min(100, f));
+  pcam.updateProjectionMatrix();
+};
+
+pc.addEventListener('pointerdown', (e) => {
+  pc.setPointerCapture(e.pointerId);
+  ptr.set(e.pointerId, [e.clientX, e.clientY]);
+
+  vLon = vLat = 0;
+
+  if (ptr.size === 2) pinch = dist();
+});
+
+pc.addEventListener('pointermove', (e) => {
+  const p = ptr.get(e.pointerId);
+  if (!p) return;
+
+  if (ptr.size === 1) {
+    const k = pcam.fov / innerHeight;
+    const dx = e.clientX - p[0];
+    const dy = e.clientY - p[1];
+
+    lon -= dx * k;
+    lat = Math.max(-85, Math.min(85, lat + dy * k));
+
+    vLon = -dx * k;
+    vLat = dy * k;
+
+    ptr.set(e.pointerId, [e.clientX, e.clientY]);
+  } else {
+    ptr.set(e.pointerId, [e.clientX, e.clientY]);
+
+    const d = dist();
+    zoom(pcam.fov * pinch / d);
+    pinch = d;
+  }
+});
+
+const up = (e) => ptr.delete(e.pointerId);
+
+pc.addEventListener('pointerup', up);
+pc.addEventListener('pointercancel', up);
+
+pc.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  zoom(pcam.fov + e.deltaY * .05);
+}, { passive: false });
+
+function renderPano() {
+  if (!ptr.size) {
+    lon += vLon;
+    lat = Math.max(-85, Math.min(85, lat + vLat));
+    vLon *= .93;
+    vLat *= .93;
+  }
+
+  const phi = THREE.MathUtils.degToRad(90 - lat);
+  const th = THREE.MathUtils.degToRad(lon);
+
+  pcam.lookAt(
+    Math.sin(phi) * Math.cos(th),
+    Math.cos(phi),
+    Math.sin(phi) * Math.sin(th)
+  );
+
+  pr.render(ps, pcam);
+}
+
+/* ============ ЦИКЛ РЕНДЕРИНГУ ============ */
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+
+  if (panoOpen) {
+    pr.setSize(innerWidth, innerHeight, false);
+    pcam.aspect = innerWidth / innerHeight;
+    pcam.updateProjectionMatrix();
+  }
+}
+
+addEventListener('resize', resize);
+resize();
+
+renderer.setAnimationLoop(() => {
+  if (panoOpen) {
+    renderPano();
+    return;
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+  updateMarkers();
+});
+</script>
+
+</body>
+</html>
