@@ -548,7 +548,7 @@ function parseTraj(t) {
 function buildLocal() {
   pts = rows.map((r) =>
     S.zup
-      ? new THREE.Vector3(r.p[0], r.p[2], -r.p[1])
+      ? new THREE.Vector3(-r.p[0], r.p[2], -r.p[1])
       : new THREE.Vector3(...r.p)
   );
 
