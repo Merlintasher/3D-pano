@@ -361,17 +361,17 @@ const CFG = {
 
   // Початкові параметри траєкторії.
   // Збережені раніше значення localStorage також використовуються.
- align: {
-  x: null,
-  y: null,
-  z: null,
-  rot: 90,
-  scale: 1,
-  zup: true
-}
+  align: {
+    x: null,
+    y: null,
+    z: null,
+    rot: 0,
+    scale: 1,
+    zup: false
+  }
 };
 
-const KEY = 'traj-align-v1';
+const KEY = 'traj-align-reference-v2';
 
 /* ============ СЦЕНА ============ */
 
@@ -483,12 +483,7 @@ try {
   console.warn('Не вдалося прочитати збережені параметри траєкторії:', e);
 }
 
-const S = {
-  ...CFG.align,
-  ...savedAlign,
-  rot: 90,
-  zup: true
-};
+const S = { ...CFG.align, ...savedAlign };
 
 function parseTraj(t) {
   t = t.replace(/^\uFEFF/, '');
@@ -548,7 +543,7 @@ function parseTraj(t) {
 function buildLocal() {
   pts = rows.map((r) =>
     S.zup
-      ? new THREE.Vector3(-r.p[0], -r.p[2], -r.p[1])
+      ? new THREE.Vector3(r.p[0], r.p[2], -r.p[1])
       : new THREE.Vector3(...r.p)
   );
 
