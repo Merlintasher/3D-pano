@@ -275,47 +275,6 @@ button.on {
 }
 
 
-#alignPanel {
-  position: fixed;
-  right: 12px;
-  top: 12px;
-  z-index: 12;
-  width: 285px;
-  padding: 12px;
-  border-radius: 14px;
-  background: rgba(16,24,32,.92);
-  backdrop-filter: blur(10px);
-  font-size: 12px;
-}
-#alignPanel h3 { margin: 0 0 8px; font-size: 14px; }
-#alignPanel .row {
-  display: grid;
-  grid-template-columns: 54px 1fr 62px;
-  gap: 7px;
-  align-items: center;
-  margin: 6px 0;
-}
-#alignPanel input[type="range"] { width: 100%; }
-#alignPanel input[type="number"] {
-  width: 62px;
-  min-width: 0;
-  padding: 5px;
-  border: 0;
-  border-radius: 7px;
-}
-#alignPanel .actions { display:flex; gap:5px; margin-top:8px; flex-wrap:wrap; }
-#alignPanel button { min-height:32px; padding:0 9px; font-size:12px; background:rgba(255,255,255,.08); }
-#alignPanel pre {
-  margin: 8px 0 0;
-  padding: 7px;
-  border-radius: 8px;
-  background: rgba(0,0,0,.28);
-  white-space: pre-wrap;
-  user-select: all;
-  color: #fff;
-}
-#alignPanel .check { display:flex; gap:7px; align-items:center; margin-top:7px; }
-
 @media (prefers-reduced-motion: reduce) {
   .sheet { transition: none; }
 }
@@ -343,21 +302,6 @@ button.on {
 </div>
 
 <div id="status">Завантаження моделі…</div>
-
-<div id="alignPanel">
-  <h3>Вирівнювання траєкторії</h3>
-  <div class="row"><label>X</label><input id="aXr" type="range"><input id="aX" type="number" step="0.1"></div>
-  <div class="row"><label>Y</label><input id="aYr" type="range"><input id="aY" type="number" step="0.1"></div>
-  <div class="row"><label>Z</label><input id="aZr" type="range"><input id="aZ" type="number" step="0.1"></div>
-  <div class="row"><label>Поворот</label><input id="aRr" type="range" min="-180" max="180" step="0.1"><input id="aR" type="number" step="0.1"></div>
-  <div class="row"><label>Масштаб</label><input id="aSr" type="range" min="0.1" max="3" step="0.01"><input id="aS" type="number" step="0.01"></div>
-  <label class="check"><input id="aZup" type="checkbox"> Z-up</label>
-  <div class="actions">
-    <button id="aReset" type="button">Скинути</button>
-    <button id="aCopy" type="button">Копіювати значення</button>
-  </div>
-  <pre id="aOut"></pre>
-</div>
 
 <section class="sheet" id="sList" aria-label="Список панорам">
   <header>
@@ -419,16 +363,15 @@ const CFG = {
   // Початкові параметри траєкторії.
   // Збережені раніше значення localStorage також використовуються.
   align: {
-    x: null,
-    y: null,
-    z: null,
-    rot: 0,
-    scale: 1,
-    zup: false
+    x: 32.66,
+    y: 0.00,
+    z: -30.13,
+    rot: -94.50,
+    scale: 1.000,
+    zup: true
   }
 };
 
-const KEY = 'traj-align-reference-v2';
 
 /* ============ СЦЕНА ============ */
 
@@ -454,8 +397,25 @@ const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
 
 const controls = new OrbitControls(camera, canvas);
 controls.enableDamping = true;
+controls.dampingFactor = 0.08;
 controls.screenSpacePanning = true;
 controls.maxPolarAngle = Math.PI * 0.495;
+
+// ЛКМ — тільки обертання. Вимикаємо стандартні дії браузера,
+// які можуть спричиняти перетягування/відкриття посилань.
+controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE;
+
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('dragstart', (e) => e.preventDefault());
+canvas.addEventListener('auxclick', (e) => e.preventDefault());
+
+document.addEventListener('pointerup', () => {
+  down = null;
+});
+
+window.addEventListener('blur', () => {
+  down = null;
+});
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 1.1));
 
@@ -532,15 +492,7 @@ let local = [];
 let pts = [];
 let hs = [];
 
-let savedAlign = {};
-
-try {
-  savedAlign = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
-} catch (e) {
-  console.warn('Не вдалося прочитати збережені параметри траєкторії:', e);
-}
-
-const S = { ...CFG.align, ...savedAlign };
+const S = { ...CFG.align };
 
 function parseTraj(t) {
   t = t.replace(/^\uFEFF/, '');
@@ -619,13 +571,6 @@ function applyAlign() {
   traj.updateMatrixWorld(true);
 }
 
-function saveAlign() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(S));
-  } catch (e) {
-    console.warn('Не вдалося зберегти параметри траєкторії:', e);
-  }
-}
 
 /*
   Початкове положення траєкторії.
@@ -639,113 +584,12 @@ function initTrajectory() {
     S.x = c.x;
     S.y = box.min.y + 1.6;
     S.z = c.z;
-    saveAlign();
   }
 
   buildLocal();
   applyAlign();
 }
 
-
-/* ============ РУЧНЕ ВИРІВНЮВАННЯ ============ */
-
-function setupAlignPanel() {
-  const size = box.getSize(new THREE.Vector3());
-  const span = Math.max(size.x, size.y, size.z) * 1.5;
-  const center = box.getCenter(new THREE.Vector3());
-
-  const pairs = [
-    ['aXr','aX','x', center.x - span, center.x + span, 0.1],
-    ['aYr','aY','y', box.min.y - span * .5, box.max.y + span * .5, 0.1],
-    ['aZr','aZ','z', center.z - span, center.z + span, 0.1],
-    ['aRr','aR','rot', -180, 180, 0.1],
-    ['aSr','aS','scale', 0.1, 3, 0.01]
-  ];
-
-  const out = $('aOut');
-
-  function showValues() {
-    out.textContent =
-`x: ${Number(S.x).toFixed(2)}
-y: ${Number(S.y).toFixed(2)}
-z: ${Number(S.z).toFixed(2)}
-rot: ${Number(S.rot).toFixed(2)}
-scale: ${Number(S.scale).toFixed(3)}
-zup: ${!!S.zup}`;
-  }
-
-  function refresh() {
-    for (const [rid,nid,key,min,max,step] of pairs) {
-      const r = $(rid), n = $(nid);
-      r.min = min; r.max = max; r.step = step;
-      r.value = S[key];
-      n.value = S[key];
-    }
-    $('aZup').checked = !!S.zup;
-    showValues();
-  }
-
-  for (const [rid,nid,key] of pairs) {
-    const r = $(rid), n = $(nid);
-    const set = (v) => {
-      const num = Number(v);
-      if (!Number.isFinite(num)) return;
-      S[key] = num;
-      if (key === 'rot' || key === 'scale' || key === 'x' || key === 'y' || key === 'z') {
-        applyAlign();
-      }
-      r.value = S[key];
-      n.value = S[key];
-      saveAlign();
-      showValues();
-    };
-    r.addEventListener('input', () => set(r.value));
-    n.addEventListener('input', () => set(n.value));
-  }
-
-  $('aZup').addEventListener('change', () => {
-    S.zup = $('aZup').checked;
-    buildLocal();
-    applyAlign();
-    saveAlign();
-    showValues();
-  });
-
-  $('aReset').onclick = () => {
-    localStorage.removeItem(KEY);
-    S.x = center.x;
-    S.y = box.min.y + 1.6;
-    S.z = center.z;
-    S.rot = 0;
-    S.scale = 1;
-    S.zup = false;
-    buildLocal();
-    applyAlign();
-    saveAlign();
-    refresh();
-  };
-
-  $('aCopy').onclick = async () => {
-    const value =
-`align: {
-  x: ${Number(S.x).toFixed(2)},
-  y: ${Number(S.y).toFixed(2)},
-  z: ${Number(S.z).toFixed(2)},
-  rot: ${Number(S.rot).toFixed(2)},
-  scale: ${Number(S.scale).toFixed(3)},
-  zup: ${!!S.zup}
-}`;
-    try {
-      await navigator.clipboard.writeText(value);
-      $('aCopy').textContent = 'Скопійовано';
-      setTimeout(() => $('aCopy').textContent = 'Копіювати значення', 1200);
-    } catch {
-      out.textContent = value;
-    }
-  };
-
-  refresh();
-}
 
 /* ============ МАРКЕРИ ТА СПИСОК ПАНОРАМ ============ */
 
@@ -826,7 +670,18 @@ function updateMarkers() {
 let down = null;
 
 canvas.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  canvas.setPointerCapture?.(e.pointerId);
   down = [e.clientX, e.clientY];
+});
+
+canvas.addEventListener('pointercancel', () => {
+  down = null;
+});
+
+canvas.addEventListener('lostpointercapture', () => {
+  down = null;
 });
 
 canvas.addEventListener('pointerup', (e) => {
@@ -834,6 +689,10 @@ canvas.addEventListener('pointerup', (e) => {
 
   const start = down;
   down = null;
+
+  if (canvas.hasPointerCapture?.(e.pointerId)) {
+    canvas.releasePointerCapture(e.pointerId);
+  }
 
   if (Math.hypot(e.clientX - start[0], e.clientY - start[1]) > 6) {
     return;
@@ -906,7 +765,6 @@ loader.load(
 
       buildMarkers();
       initTrajectory();
-      setupAlignPanel();
 
       statusEl.classList.add('hidden');
     } catch (err) {
